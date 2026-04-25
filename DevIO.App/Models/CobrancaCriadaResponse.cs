@@ -6,4 +6,7 @@ public class CobrancaCriadaResponse
     public string? Status { get; set; }
     public string? StatusDetail { get; set; }
     public decimal? TransactionAmount { get; set; }
+    public string? CodigoMensagem { get; set; }
+    public string? MensagemUsuario { get; set; }
+    public bool ExibirDocumentoIdentidade { get; set; }
 }

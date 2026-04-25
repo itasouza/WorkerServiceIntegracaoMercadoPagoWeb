@@ -120,16 +120,22 @@ namespace DevIO.App.Controllers
                 {
                     using var doc = JsonDocument.Parse(texto);
                     var root = doc.RootElement;
+                    var status = root.TryGetProperty("status", out var st) ? st.GetString() : null;
+                    var statusDetail = root.TryGetProperty("status_detail", out var sd) ? sd.GetString() : null;
+                    var infoMensagem = MapearMensagemUsuario(status, statusDetail);
                     var resposta = new CobrancaCriadaResponse
                     {
                         Id = root.TryGetProperty("id", out var idEl) && idEl.ValueKind == JsonValueKind.Number
                             ? idEl.GetInt64()
                             : null,
-                        Status = root.TryGetProperty("status", out var st) ? st.GetString() : null,
-                        StatusDetail = root.TryGetProperty("status_detail", out var sd) ? sd.GetString() : null,
+                        Status = status,
+                        StatusDetail = statusDetail,
                         TransactionAmount = root.TryGetProperty("transaction_amount", out var ta) && ta.ValueKind == JsonValueKind.Number
                             ? ta.GetDecimal()
-                            : null
+                            : null,
+                        CodigoMensagem = infoMensagem.Codigo,
+                        MensagemUsuario = infoMensagem.Mensagem,
+                        ExibirDocumentoIdentidade = infoMensagem.ExibirDocumentoIdentidade
                     };
                     return (true, resposta, texto, null, false);
                 }
@@ -152,6 +158,33 @@ namespace DevIO.App.Controllers
             }
 
             return (false, null, texto, detalhe, binNotFound);
+        }
+
+        private static (string Codigo, string Mensagem, bool ExibirDocumentoIdentidade) MapearMensagemUsuario(
+            string? status,
+            string? statusDetail)
+        {
+            var detail = (statusDetail ?? string.Empty).Trim().ToLowerInvariant();
+            var st = (status ?? string.Empty).Trim().ToLowerInvariant();
+
+            if (st == "approved")
+                return ("APRO", "Pagamento aprovado", true);
+
+            if (st.StartsWith("pending", StringComparison.Ordinal))
+                return ("CONT", "Pagamento pendente", false);
+
+            return detail switch
+            {
+                "cc_rejected_call_for_authorize" => ("CALL", "Recusado com validação para autorizar", false),
+                "cc_rejected_insufficient_amount" => ("FUND", "Recusado por quantia insuficiente", false),
+                "cc_rejected_bad_filled_security_code" => ("SECU", "Recusado por código de segurança inválido", false),
+                "cc_rejected_bad_filled_date" => ("EXPI", "Recusado por problema com a data de vencimento", false),
+                "cc_rejected_bad_filled_card_number" => ("FORM", "Recusado por erro no formulário", false),
+                "cc_rejected_bad_filled_other" => ("FORM", "Recusado por erro no formulário", false),
+                "cc_rejected_bad_filled_cardholder_name" => ("FORM", "Recusado por erro no formulário", false),
+                "cc_rejected_bad_filled_document_number" => ("FORM", "Recusado por erro no formulário", false),
+                _ => ("OTHE", "Recusado por erro geral", true)
+            };
         }
 
         ////MercadoPagoApiException com bin_not_found não é um bug do C# em si: é a API do Mercado Pago recusando o POST /v1/payments com HTTP 400. O SDK só repassa essa falha como exceção na linha do CreateAsync.

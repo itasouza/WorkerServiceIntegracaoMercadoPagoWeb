@@ -203,7 +203,17 @@
           try {
             const j = JSON.parse(text);
             if (res.ok) {
-              out.textContent = "Pagamento criado (HTTP " + res.status + ")\n" + JSON.stringify(j, null, 2);
+              const mensagemUsuario = j.mensagemUsuario || j.MensagemUsuario;
+              const codigoMensagem = j.codigoMensagem || j.CodigoMensagem;
+              const exibirDocumento = j.exibirDocumentoIdentidade ?? j.ExibirDocumentoIdentidade;
+              const documento = document.getElementById("form-checkout__identificationNumber").value.replace(/\D/g, "");
+              const linhas = [
+                "Pagamento criado (HTTP " + res.status + ")",
+                codigoMensagem ? "Código: " + codigoMensagem : null,
+                mensagemUsuario ? "Mensagem: " + mensagemUsuario : null,
+                exibirDocumento ? "Documento: (CPF) " + documento : "Documento: -"
+              ].filter(Boolean);
+              out.textContent = linhas.join("\n") + "\n\n" + JSON.stringify(j, null, 2);
               out.classList.remove("border-danger");
               out.classList.add("border-success", "text-success");
             } else {
