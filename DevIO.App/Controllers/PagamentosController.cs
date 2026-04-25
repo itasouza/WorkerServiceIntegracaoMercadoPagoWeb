@@ -61,6 +61,119 @@ namespace DevIO.App.Controllers
             return Problem(detail: r1.CorpoErro ?? r1.CorpoBruto, statusCode: (int)HttpStatusCode.BadRequest);
         }
 
+        [HttpPost("pix")]
+        [ProducesResponseType(typeof(PixCriadoResponse), StatusCodes.Status201Created)]
+        public async Task<IActionResult> CriarPix(
+            [FromBody] CriarPixRequest body,
+            CancellationToken cancellationToken)
+        {
+            if (string.IsNullOrWhiteSpace(_mp.AccessToken))
+                return Problem("Configure MercadoPago:AccessToken no appsettings.", statusCode: (int)HttpStatusCode.ServiceUnavailable);
+
+            if (!ModelState.IsValid)
+                return ValidationProblem(ModelState);
+
+            var accessToken = _mp.AccessToken.Trim();
+            var json = JsonSerializer.Serialize(MontarJsonPix(body));
+
+            using var req = new HttpRequestMessage(System.Net.Http.HttpMethod.Post, "https://api.mercadopago.com/v1/payments");
+            req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+            req.Headers.TryAddWithoutValidation("X-Idempotency-Key", Guid.NewGuid().ToString("N"));
+            req.Content = new StringContent(json, Encoding.UTF8, "application/json");
+
+            var http = _httpClientFactory.CreateClient();
+            using var resp = await http.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
+            var texto = await resp.Content.ReadAsStringAsync(cancellationToken);
+
+            if (resp.StatusCode != HttpStatusCode.Created)
+            {
+                string? detalhe;
+                try
+                {
+                    using var err = JsonDocument.Parse(texto);
+                    detalhe = JsonSerializer.Serialize(new { Message = "Error response from API.", StatusCode = (int)resp.StatusCode, apiError = err.RootElement });
+                }
+                catch
+                {
+                    detalhe = texto;
+                }
+
+                return Problem(detail: detalhe, statusCode: (int)HttpStatusCode.BadRequest);
+            }
+
+            try
+            {
+                using var doc = JsonDocument.Parse(texto);
+                var root = doc.RootElement;
+                var status = root.TryGetProperty("status", out var st) ? st.GetString() : null;
+                var statusDetail = root.TryGetProperty("status_detail", out var sd) ? sd.GetString() : null;
+                var infoMensagem = MapearMensagemUsuario(status, statusDetail);
+
+                var pointOfInteraction = root.TryGetProperty("point_of_interaction", out var poi) ? poi : default;
+                var transactionData = pointOfInteraction.ValueKind == JsonValueKind.Object &&
+                                      pointOfInteraction.TryGetProperty("transaction_data", out var txData)
+                    ? txData
+                    : default;
+
+                var resposta = new PixCriadoResponse
+                {
+                    Id = root.TryGetProperty("id", out var idEl) && idEl.ValueKind == JsonValueKind.Number
+                        ? idEl.GetInt64()
+                        : null,
+                    Status = status,
+                    StatusDetail = statusDetail,
+                    TransactionAmount = root.TryGetProperty("transaction_amount", out var ta) && ta.ValueKind == JsonValueKind.Number
+                        ? ta.GetDecimal()
+                        : null,
+                    CodigoMensagem = infoMensagem.Codigo,
+                    MensagemUsuario = infoMensagem.Mensagem,
+                    ExibirDocumentoIdentidade = infoMensagem.ExibirDocumentoIdentidade,
+                    QrCode = transactionData.ValueKind == JsonValueKind.Object && transactionData.TryGetProperty("qr_code", out var qrCode)
+                        ? qrCode.GetString()
+                        : null,
+                    QrCodeBase64 = transactionData.ValueKind == JsonValueKind.Object && transactionData.TryGetProperty("qr_code_base64", out var qrBase64)
+                        ? qrBase64.GetString()
+                        : null,
+                    TicketUrl = transactionData.ValueKind == JsonValueKind.Object && transactionData.TryGetProperty("ticket_url", out var ticketUrl)
+                        ? ticketUrl.GetString()
+                        : null
+                };
+
+                return StatusCode(StatusCodes.Status201Created, resposta);
+            }
+            catch
+            {
+                return Problem(detail: texto, statusCode: (int)HttpStatusCode.BadRequest);
+            }
+        }
+
+        private static Dictionary<string, object?> MontarJsonPix(CriarPixRequest body)
+        {
+            var payer = new Dictionary<string, object?> { ["email"] = body.PayerEmail.Trim() };
+            if (!string.IsNullOrWhiteSpace(body.PayerIdentificationType) &&
+                !string.IsNullOrWhiteSpace(body.PayerIdentificationNumber))
+            {
+                payer["identification"] = new Dictionary<string, object?>
+                {
+                    ["type"] = body.PayerIdentificationType.Trim(),
+                    ["number"] = body.PayerIdentificationNumber.Trim()
+                };
+            }
+
+            var root = new Dictionary<string, object?>
+            {
+                ["transaction_amount"] = (double)body.TransactionAmount,
+                ["description"] = string.IsNullOrWhiteSpace(body.Description) ? "Pagamento via PIX" : body.Description.Trim(),
+                ["payment_method_id"] = "pix",
+                ["payer"] = payer
+            };
+
+            if (!string.IsNullOrWhiteSpace(body.ExternalReference))
+                root["external_reference"] = body.ExternalReference.Trim();
+
+            return root;
+        }
+
         private static Dictionary<string, object?> MontarJsonPagamento(CriarCobrancaRequest body, bool comPaymentMethodId)
         {
             var payer = new Dictionary<string, object?> { ["email"] = body.PayerEmail.Trim() };

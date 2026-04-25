@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Checkout PIX - teste</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/4.0.0/css/bootstrap.min.css" />
+</head>
+<body class="bg-light">
+  <div class="container py-4">
+    <div class="row justify-content-center">
+      <div class="col-lg-8">
+        <h2 class="mb-3">Pagamento via PIX</h2>
+        <p class="text-muted">Fluxo de teste usando API de pagamentos do Mercado Pago.</p>
+
+        <form id="form-pix" class="card p-3 shadow-sm">
+          <div class="form-row">
+            <div class="form-group col-md-6">
+              <label for="payerEmail">E-mail</label>
+              <input type="email" class="form-control" id="payerEmail" value="test@test.com" required />
+            </div>
+            <div class="form-group col-md-6">
+              <label for="transactionAmount">Valor (BRL)</label>
+              <input type="number" class="form-control" id="transactionAmount" min="0.01" step="0.01" value="10" required />
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group col-md-4">
+              <label for="identificationType">Documento</label>
+              <input type="text" class="form-control" id="identificationType" value="CPF" />
+            </div>
+            <div class="form-group col-md-8">
+              <label for="identificationNumber">Numero do documento</label>
+              <input type="text" class="form-control" id="identificationNumber" value="12345678909" />
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label for="description">Descricao</label>
+            <input type="text" class="form-control" id="description" value="Pedido de teste via PIX" />
+          </div>
+
+          <button class="btn btn-primary" type="submit">Gerar PIX</button>
+        </form>
+
+        <div class="card mt-3 p-3 shadow-sm">
+          <h5>Resultado</h5>
+          <pre id="out" class="bg-white border rounded p-2 mb-3">(envie o formulario)</pre>
+
+          <h6>QR Code</h6>
+          <img id="qr-image" alt="QR Code PIX" style="max-width: 280px; display: none;" class="border rounded p-2 bg-white mb-2" />
+
+          <label for="qr-copy-paste">Codigo copia e cola</label>
+          <textarea id="qr-copy-paste" class="form-control" rows="4" readonly></textarea>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="/js/pagamento-pix.js"></script>
+</body>
+</html>
